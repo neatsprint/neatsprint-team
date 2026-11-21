@@ -7,7 +7,7 @@ NeatSprint **Team Service**.
 | Service name | `team` |
 | Container port | `8000` |
 | Host port (dev) | `8004` |
-| Gateway prefix | `/api/v1/team` |
+| Gateway prefix | `/api/v1/teams` |
 | Database | `db_team` |
 | Owner | OpenCade (AI) / Laksiri (approval) |
 
@@ -24,7 +24,7 @@ cp .env.example .env
 uv run uvicorn neatsprint_team.main:app --reload --port 8000
 ```
 
-Or from the orchestrator: `docker compose up -d team`.
+Or from the orchestrator: `docker compose up -d neatsprint-team`.
 
 ## Endpoints
 
