@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 
 from neatsprint_lib.db import Base, TenantMixin, TimestampMixin
+from neatsprint_lib.events import OutboxEvent as OutboxEvent  # noqa: F401 - register table
 from neatsprint_lib.ids import new_id
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID

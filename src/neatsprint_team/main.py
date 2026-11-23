@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -13,6 +14,7 @@ from neatsprint_lib.api import create_health_router, install_platform_middleware
 from neatsprint_lib.auth import TokenVerifier, install_auth
 from neatsprint_lib.db import check_database, create_engine, create_session_factory
 from neatsprint_lib.errors import install_error_handlers
+from neatsprint_lib.events import run_relay
 from neatsprint_lib.logging import configure_logging
 
 from neatsprint_team.api.router import internal_router, router
@@ -46,9 +48,29 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         install_auth(app, verifier)
         app.state.token_verifier = verifier
 
+    outbox_stop: asyncio.Event | None = None
+    outbox_task: asyncio.Task[None] | None = None
+    if engine is not None and settings.redis_url and settings.outbox_enabled:
+        outbox_stop = asyncio.Event()
+        outbox_task = asyncio.create_task(
+            run_relay(
+                app.state.session_factory,
+                settings.redis_url,
+                settings.outbox_stream,
+                outbox_stop,
+            )
+        )
+
     try:
         yield
     finally:
+        if outbox_stop is not None:
+            outbox_stop.set()
+        if outbox_task is not None:
+            try:
+                await asyncio.wait_for(outbox_task, timeout=5)
+            except TimeoutError:
+                outbox_task.cancel()
         if engine is not None:
             await engine.dispose()
 

@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse, Response
 from neatsprint_lib.auth import Principal, require_permission
 from neatsprint_lib.db import bind_tenant, get_session, get_tenant_session
 from neatsprint_lib.errors import ApiError
+from neatsprint_lib.events import enqueue
 from neatsprint_lib.ids import new_id
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -88,6 +89,13 @@ async def create_team(
             user_id=team.lead_id,
             role_in_team="LEAD",
         )
+    )
+    enqueue(
+        session,
+        event_type="team.created",
+        tenant_id=principal.tenant_id,
+        actor_id=principal.user_id,
+        payload={"team_id": str(team.id), "name": team.name},
     )
     await session.commit()
     return JSONResponse(envelope(request, team_payload(team)), status_code=201)
@@ -172,6 +180,13 @@ async def add_member(
                 role_in_team=payload.role_in_team,
             )
         )
+        enqueue(
+            session,
+            event_type="team.member_added",
+            tenant_id=principal.tenant_id,
+            actor_id=principal.user_id,
+            payload={"team_id": str(team_id), "user_id": str(payload.user_id)},
+        )
         await session.commit()
     return JSONResponse(
         envelope(request, {"team_id": str(team_id), "user_id": str(payload.user_id)}),
@@ -192,6 +207,13 @@ async def remove_member(
     member = await session.get(TeamMember, {"team_id": team_id, "user_id": user_id})
     if member is not None and member.tenant_id == principal.tenant_id:
         await session.delete(member)
+        enqueue(
+            session,
+            event_type="team.member_removed",
+            tenant_id=principal.tenant_id,
+            actor_id=principal.user_id,
+            payload={"team_id": str(team_id), "user_id": str(user_id)},
+        )
         await session.commit()
     return Response(status_code=204)
 
