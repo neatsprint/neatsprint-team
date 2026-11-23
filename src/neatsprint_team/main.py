@@ -1,11 +1,8 @@
-"""Entry point for the NeatSprint Team Service.
-
-The service owns its logical database and exposes only its public API. Cross-service
-access happens over HTTP or events, never through a shared database (ADR-002).
-"""
+"""Team service entry point."""
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -13,18 +10,19 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from neatsprint_lib.api import create_health_router, install_platform_middleware
+from neatsprint_lib.auth import TokenVerifier, install_auth
 from neatsprint_lib.db import check_database, create_engine, create_session_factory
 from neatsprint_lib.errors import install_error_handlers
 from neatsprint_lib.logging import configure_logging
 
-from neatsprint_team.api.router import api_router
+from neatsprint_team.api.router import internal_router, router
 from neatsprint_team.settings import settings
 
+logger = logging.getLogger(__name__)
 configure_logging(settings.service_name, settings.log_level, settings.version)
 
 
 def _database_check() -> Any:
-    """Readiness check bound to the engine created in the lifespan."""
     engine = getattr(app.state, "engine", None)
     if engine is None:
         return True
@@ -38,6 +36,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         engine = create_engine(settings.database_url)
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
+
+    if settings.jwks_url:
+        verifier = TokenVerifier(
+            issuer=settings.jwt_issuer,
+            audience=settings.jwt_audience,
+            jwks_url=settings.jwks_url,
+        )
+        install_auth(app, verifier)
+        app.state.token_verifier = verifier
+
     try:
         yield
     finally:
@@ -53,7 +61,7 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None if settings.is_production else "/openapi.json",
 )
-
+app.state.settings = settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -61,25 +69,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 install_error_handlers(app)
 install_platform_middleware(
     app, settings.service_name, metrics_enabled=settings.metrics_enabled
 )
 app.include_router(
     create_health_router(
-        settings.service_name,
-        {"database": _database_check},
-        version=settings.version,
+        settings.service_name, {"database": _database_check}, version=settings.version
     )
 )
-app.include_router(api_router, prefix=f"/api/v1/{settings.api_prefix}")
+
+
+@app.get("/api/v1/teams/ping", tags=["platform"], summary="Service liveness echo")
+async def ping() -> dict[str, str]:
+    return {"ping": "pong", "service": settings.service_name}
+
+
+app.include_router(router, prefix="/api/v1")
+app.include_router(internal_router)
 
 
 @app.get("/", include_in_schema=False)
 async def root() -> dict[str, str]:
-    return {
-        "service": settings.service_name,
-        "version": settings.version,
-        "docs": "/docs",
-    }
+    return {"service": settings.service_name, "version": settings.version, "docs": "/docs"}
