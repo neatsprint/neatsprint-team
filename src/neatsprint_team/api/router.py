@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import JSONResponse, Response
 from neatsprint_lib.auth import Principal, require_permission
-from neatsprint_lib.db import get_session
+from neatsprint_lib.db import bind_tenant, get_session, get_tenant_session
 from neatsprint_lib.errors import ApiError
 from neatsprint_lib.ids import new_id
 from sqlalchemy import select
@@ -19,7 +19,8 @@ from neatsprint_team.db.models import Team, TeamMember
 router = APIRouter(prefix="/teams", tags=["teams"])
 internal_router = APIRouter(prefix="/internal", tags=["internal"])
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+SessionDep = Annotated[AsyncSession, Depends(get_tenant_session)]
+AdminSessionDep = Annotated[AsyncSession, Depends(get_session)]
 ViewPrincipal = Annotated[Principal, Depends(require_permission("team:team:view"))]
 ManagePrincipal = Annotated[Principal, Depends(require_permission("team:team:manage"))]
 MemberPrincipal = Annotated[Principal, Depends(require_permission("team:member:manage"))]
@@ -214,8 +215,9 @@ async def internal_members(
     tenant_id: UUID,
     _: ServiceDep,
     request: Request,
-    session: SessionDep,
+    session: AdminSessionDep,
 ) -> JSONResponse:
+    bind_tenant(session, tenant_id)
     team = await session.get(Team, team_id)
     if team is None or team.tenant_id != tenant_id:
         raise ApiError(404, "not_found", "Team not found.")

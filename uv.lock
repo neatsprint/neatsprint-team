@@ -414,8 +414,8 @@ wheels = [
 
 [[package]]
 name = "neatsprint-lib"
-version = "0.3.0"
-source = { git = "https://github.com/neatsprint/neatsprint-lib?rev=v0.3.0#2d13f6e8ae678ee857c3a176fd943498be522309" }
+version = "0.4.0"
+source = { git = "https://github.com/neatsprint/neatsprint-lib?rev=v0.4.0#00d85ab9b4d2d377f3362c0f71d283ff5f4c394d" }
 dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
@@ -452,7 +452,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.14.0,<2.0" },
     { name = "fastapi", specifier = ">=0.115.0,<1.0" },
-    { name = "neatsprint-lib", git = "https://github.com/neatsprint/neatsprint-lib?rev=v0.3.0" },
+    { name = "neatsprint-lib", git = "https://github.com/neatsprint/neatsprint-lib?rev=v0.4.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0,<1.0" },
 ]
 
