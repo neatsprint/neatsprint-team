@@ -247,3 +247,47 @@ async def internal_members(
         await session.execute(select(TeamMember.user_id).where(TeamMember.team_id == team_id))
     ).scalars()
     return JSONResponse(envelope(request, {"user_ids": [str(item) for item in rows]}))
+
+
+@internal_router.get(
+    "/users/{user_id}/scope", summary="Internal team scope for a user"
+)
+async def internal_user_scope(
+    user_id: UUID,
+    tenant_id: UUID,
+    _: ServiceDep,
+    request: Request,
+    session: AdminSessionDep,
+) -> JSONResponse:
+    bind_tenant(session, tenant_id)
+    team_ids = set(
+        (
+            await session.execute(
+                select(TeamMember.team_id).where(
+                    TeamMember.tenant_id == tenant_id,
+                    TeamMember.user_id == user_id,
+                )
+            )
+        ).scalars()
+    )
+    user_ids = {user_id}
+    if team_ids:
+        user_ids.update(
+            (
+                await session.execute(
+                    select(TeamMember.user_id).where(
+                        TeamMember.tenant_id == tenant_id,
+                        TeamMember.team_id.in_(team_ids),
+                    )
+                )
+            ).scalars()
+        )
+    return JSONResponse(
+        envelope(
+            request,
+            {
+                "team_ids": [str(team_id) for team_id in sorted(team_ids, key=str)],
+                "user_ids": [str(item) for item in sorted(user_ids, key=str)],
+            },
+        )
+    )
